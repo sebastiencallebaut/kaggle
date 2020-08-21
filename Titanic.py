@@ -13,9 +13,10 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import GridSearchCV
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier,AdaBoostClassifier, GradientBoostingClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
 
 # 1. Question and problem definition
 
@@ -73,7 +74,8 @@ combined_df["Embarked"] = combined_df["Embarked"].fillna("S")
 
 # Age: replace it with the median age
 median_age = np.nanmedian(combined_df["Age"])
-combined_df["Age"] = combined_df["Age"].fillna(median_age)
+mean_age = np.nanmean(combined_df["Age"])
+combined_df["Age"] = combined_df["Age"].fillna(mean_age)
 
 # Overview of all changes - no missing data anymore
 print(combined_df.info())
@@ -83,6 +85,7 @@ combined_df["Title"] = combined_df["Name"].str.split(",", expand = True)[1].str.
 print(combined_df["Title"])
 
 # One-hot encoding
+print(combined_df["Ticket"])
 combined_df = combined_df.drop(["Name", "Ticket"], axis = 1)
 
 combined_df = pd.get_dummies(combined_df)
@@ -96,7 +99,7 @@ print(test_df.info())
 
 # Train our model
 y_train_df = train_df["Survived"]
-x_train_df = train_df.drop("Survived", axis = 1)
+x_train_df = train_df.drop(["Survived"], axis = 1)
 x_train, x_test, y_train, y_test = train_test_split(x_train_df, y_train_df, test_size=0.3, random_state=12)
 
 # Instantiate random forest
@@ -145,3 +148,102 @@ op['Survived'] = op['Survived'].astype(int)
 op.to_csv("pred.csv", index=False)
 
 # Score of 0.78947 - Position 2727 out of 20574 on the 19th of August 2020
+
+# Ada boost
+
+# Adaboost
+DTC = DecisionTreeClassifier()
+
+model = AdaBoostClassifier(DTC, random_state=7)
+
+ada_param_grid = {"base_estimator__criterion" : ["gini", "entropy"],
+              "base_estimator__splitter" :   ["best", "random"],
+              "algorithm" : ["SAMME","SAMME.R"],
+              "n_estimators" :[1,2],
+              "learning_rate":  [0.0001, 0.001, 0.01, 0.1, 0.2, 0.3,1.5]}
+
+
+# Conduct the grid search
+CV_ada = GridSearchCV(estimator=model, param_grid=ada_param_grid, cv= 5)
+CV_ada.fit(x_train, y_train)
+
+# Get the best paramas
+print(CV_ada.best_params_)
+
+# Use these estimators for our model
+model2 = AdaBoostClassifier(DTC, random_state= 7 , algorithm = 'SAMME', base_estimator = 'gini', learning_rate = 0.0001, n_estimators = 1)
+
+# Fit the data
+model2.fit(x_train, y_train)
+
+# Make the prediction on the data
+prediction = model2.predict(x_test)
+
+# Get accuracy
+print("Accuracy for ADA on test data: ",accuracy_score(y_test,prediction))
+
+# Predictions for model
+test_df = test_df.dropna(axis = 1)
+
+# Make predictions on our data
+op_rf = model2.predict(test_df)
+
+# Get the prediction
+op = pd.DataFrame(test_df['PassengerId'])
+op['Survived'] = op_rf
+
+# Chnage type to int
+op['Survived'] = op['Survived'].astype(int)
+
+# Output the CSV file
+op.to_csv("pred2.csv", index=False)
+
+
+
+
+# Gradient boosting
+
+GBC = GradientBoostingClassifier()
+
+gb_param_grid = {'loss' : ["deviance"],
+              'n_estimators' : [100,200,300],
+              'learning_rate': [0.1, 0.05, 0.01],
+              'max_depth': [4, 8],
+              'min_samples_leaf': [100,150],
+              'max_features': [0.3, 0.1]
+              }
+
+# Conduct the grid search
+CV_gb = GridSearchCV(estimator=GBC, param_grid=gb_param_grid, cv= 5)
+CV_gb.fit(x_train, y_train)
+
+# Get the best paramas
+print(CV_gb.best_params_)
+
+# Use these estimators for our model
+model3 = GradientBoostingClassifier(random_state= 7 , learning_rate = 0.1, loss = 'deviance', max_depth = 4, max_features = 0.3, min_samples_leaf = 100, n_estimators = 200)
+
+# Fit the data
+model3.fit(x_train, y_train)
+
+# Make the prediction on the data
+prediction = model3.predict(x_test)
+
+# Get accuracy
+print("Accuracy for GB on test data: ",accuracy_score(y_test,prediction))
+
+# Predictions for model
+test_df = test_df.dropna(axis = 1)
+
+# Make predictions on our data
+op_rf = model3.predict(test_df)
+
+# Get the prediction
+op = pd.DataFrame(test_df['PassengerId'])
+op['Survived'] = op_rf
+
+# Chnage type to int
+op['Survived'] = op['Survived'].astype(int)
+
+# Output the CSV file
+op.to_csv("pred3.csv", index=False)
